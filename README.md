@@ -15,8 +15,6 @@ overwritten.
 
 [![silverbullet.nvim demo](assets/silverbullet-demo.gif)](assets/silverbullet-demo.webm)
 
-Click the animation to open the original WebM recording.
-
 ## Features
 
 - Open, create, edit, reload, and delete remote Markdown pages
