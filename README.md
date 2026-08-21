@@ -1,5 +1,9 @@
 # silverbullet.nvim
 
+> [!IMPORTANT]
+> **Experimental alpha (`v0.1.0`).** The core workflow is usable, but APIs and
+> behavior may change while the plugin receives broader real-world testing.
+
 Edit a remote [SilverBullet](https://silverbullet.md) space as a native Neovim
 Markdown workspace.
 
