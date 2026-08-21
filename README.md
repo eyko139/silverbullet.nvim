@@ -44,7 +44,7 @@ overwritten.
 
 ```lua
 {
-  "lkuehne123/silverbullet.nvim",
+  "eyko139/silverbullet.nvim",
   opts = {
     default_space = "personal",
     spaces = {
@@ -63,7 +63,7 @@ overwritten.
 
 ```lua
 use({
-  "lkuehne123/silverbullet.nvim",
+  "eyko139/silverbullet.nvim",
   config = function()
     require("silverbullet").setup({
       default_space = "personal",
@@ -83,7 +83,7 @@ use({
 ### Native packages
 
 ```sh
-git clone https://github.com/lkuehne123/silverbullet.nvim \
+git clone https://github.com/eyko139/silverbullet.nvim \
   ~/.local/share/nvim/site/pack/plugins/start/silverbullet.nvim
 ```
 
