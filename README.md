@@ -11,6 +11,12 @@ Pages open in normal buffers, `:write` saves them to SilverBullet, wiki links
 remain navigable, and concurrent browser edits are detected before they can be
 overwritten.
 
+## Demo
+
+<video src="assets/silverbullet-demo.webm" controls title="silverbullet.nvim demo"></video>
+
+[Watch the demo video](assets/silverbullet-demo.webm)
+
 ## Features
 
 - Open, create, edit, reload, and delete remote Markdown pages
