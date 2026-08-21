@@ -131,8 +131,8 @@ To enter a token securely for the current Neovim session, run
 `:SilverBulletSetToken [space]` or map `<Plug>(SilverBulletSetToken)`. The
 prompt uses `inputsecret()` and the token is kept only in memory.
 
-## Configuration
-
+## Configuration Options
+Most of the configuration is optional, see above for the *minimal* config.
 ```lua
 require("silverbullet").setup({
   default_space = "personal",
