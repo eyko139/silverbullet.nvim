@@ -216,12 +216,12 @@ The plugin does not define opinionated default keymaps. It provides `<Plug>`
 mappings that can be assigned in your configuration:
 
 ```lua
-vim.keymap.set("n", "<leader>sf", "<Plug>(SilverBulletFind)")
-vim.keymap.set("n", "<leader>sk", "<Plug>(SilverBulletSetToken)")
-vim.keymap.set("n", "<leader>ss", "<Plug>(SilverBulletSearch)")
-vim.keymap.set("n", "<leader>sb", "<Plug>(SilverBulletBacklinks)")
-vim.keymap.set("n", "<CR>", "<Plug>(SilverBulletFollowLink)")
-vim.keymap.set("n", "<leader>so", "<Plug>(SilverBulletOpenWeb)")
+vim.keymap.set("n", "<leader>sf", "<Plug>(SilverBulletFind)", { desc = "Find SilverBullet page" })
+vim.keymap.set("n", "<leader>sk", "<Plug>(SilverBulletSetToken)", { desc = "Set SilverBullet token" })
+vim.keymap.set("n", "<leader>ss", "<Plug>(SilverBulletSearch)", { desc = "Search SilverBullet pages" })
+vim.keymap.set("n", "<leader>sb", "<Plug>(SilverBulletBacklinks)", { desc = "Show SilverBullet backlinks" })
+vim.keymap.set("n", "<CR>", "<Plug>(SilverBulletFollowLink)", { desc = "Follow SilverBullet link" })
+vim.keymap.set("n", "<leader>so", "<Plug>(SilverBulletOpenWeb)", { desc = "Open SilverBullet page in browser" })
 ```
 
 #### Example: use `gd` to follow wiki links
