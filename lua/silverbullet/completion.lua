@@ -16,9 +16,16 @@ function M.omnifunc(findstart, base)
   end
   local buffer_state = state.get(vim.api.nvim_get_current_buf())
   local result = {}
-  pages.complete(base, function(matches)
+  local completion_err
+  pages.complete(base, function(matches, err)
     result = matches
+    completion_err = err
   end, buffer_state and buffer_state.space or nil)
+  if completion_err then
+    vim.schedule(function()
+      require("silverbullet.log").error("page completion failed: " .. completion_err)
+    end)
+  end
   return result
 end
 
