@@ -199,6 +199,8 @@ function M.write(buf, opts)
   end
   vim.bo[buf].modified = false
   state.invalidate_pages(buffer_state.space)
+  state.invalidate_content(buffer_state.space, buffer_state.path)
+  state.invalidate_search_index(buffer_state.space, buffer_state.path)
   vim.api.nvim_exec_autocmds("User", {
     pattern = "SilverBulletWritePost",
     modeline = false,
@@ -226,6 +228,8 @@ function M.delete(buf)
       return
     end
     state.invalidate_pages(buffer_state.space)
+    state.invalidate_content(buffer_state.space, buffer_state.path)
+    state.invalidate_search_index(buffer_state.space, buffer_state.path)
     state.remove(buf)
     vim.api.nvim_buf_delete(buf, { force = true })
   end)

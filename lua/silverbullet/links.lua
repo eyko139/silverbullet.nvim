@@ -39,6 +39,29 @@ function M.at_cursor(line, byte_col)
   end
 end
 
+function M.extract(line)
+  local results = {}
+  local search_from = 1
+  while true do
+    local start_pos = line:find("[[", search_from, true)
+    if not start_pos then
+      break
+    end
+    local end_pos = line:find("]]", start_pos + 2, true)
+    if not end_pos then
+      break
+    end
+    local link = M.parse(line:sub(start_pos + 2, end_pos - 1))
+    if link then
+      link.start_col = start_pos
+      link.end_col = end_pos + 1
+      table.insert(results, link)
+    end
+    search_from = end_pos + 2
+  end
+  return results
+end
+
 local function jump_heading(heading)
   local wanted = heading:lower():gsub("^%s+", ""):gsub("%s+$", "")
   for line_number, line in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do

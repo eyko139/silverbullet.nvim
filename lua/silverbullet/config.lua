@@ -9,6 +9,7 @@ local defaults = {
   },
   cache = {
     page_list_ttl_ms = 5000,
+    page_content_ttl_ms = 30000,
   },
   conflict = {
     check_on_focus = true,
@@ -16,10 +17,12 @@ local defaults = {
   },
   picker = {
     provider = "auto",
+    telescope = {},
   },
 }
 
 local config
+local session_tokens = {}
 
 local function validate_space(name, space)
   if type(space) ~= "table" then
@@ -40,6 +43,7 @@ end
 
 function M.setup(opts)
   opts = opts or {}
+  session_tokens = {}
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts)
   if type(config.spaces) ~= "table" or vim.tbl_isempty(config.spaces) then
     error("silverbullet.nvim requires at least one configured space")
@@ -88,6 +92,9 @@ local function command_token(command)
 end
 
 function M.resolve_token(space)
+  if session_tokens[space] then
+    return session_tokens[space]
+  end
   local auth = space.auth
   if not auth then
     return nil
@@ -115,6 +122,20 @@ function M.resolve_token(space)
     return nil, "credential provider returned an empty or non-string token"
   end
   return token
+end
+
+function M.set_session_token(space_name, token)
+  local space, resolved_name = M.space(space_name)
+  if type(token) ~= "string" or token == "" then
+    error("session token must be a non-empty string")
+  end
+  session_tokens[space] = token
+  return resolved_name
+end
+
+function M.clear_session_token(space_name)
+  local space = M.space(space_name)
+  session_tokens[space] = nil
 end
 
 function M.is_configured()

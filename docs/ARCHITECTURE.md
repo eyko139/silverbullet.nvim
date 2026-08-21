@@ -42,8 +42,8 @@ The core design principles are:
   write.
 - **Filesystem API first:** basic page editing must not depend on the optional
   SilverBullet Runtime API.
-- **No mandatory plugin dependencies:** the core picker uses
-  `vim.ui.select()` and completion uses Neovim's omnifunc.
+- **No mandatory plugin dependencies:** Telescope is used when available, with
+  a `vim.ui.select()` fallback. Completion uses Neovim's omnifunc.
 - **Transport isolation:** editor-facing code does not build `curl` commands
   or parse HTTP directly.
 - **Late credential resolution:** tokens are obtained immediately before a
@@ -300,8 +300,10 @@ may be unavailable on installations without Chromium.
 `runtime.literal()` serializes a Lua string literal so callers do not need to
 interpolate unescaped page names into executable source.
 
-The Runtime client exists as an infrastructure layer. User-facing backlinks,
-tasks, queries, anchors, and refactoring commands are not implemented yet.
+The Runtime client exists as an infrastructure layer. User-facing tasks,
+Runtime queries, anchors, and refactoring commands are not implemented yet.
+Backlinks are implemented independently by scanning wiki links through the
+filesystem API.
 
 ## Neovim integration
 
@@ -446,6 +448,7 @@ After defaults are merged, the configuration is conceptually:
   },
   cache = {
     page_list_ttl_ms = 5000,
+    page_content_ttl_ms = 30000,
   },
   conflict = {
     check_on_focus = true,
@@ -453,6 +456,7 @@ After defaults are merged, the configuration is conceptually:
   },
   picker = {
     provider = "auto",
+    telescope = {},
   },
 }
 ```
@@ -504,6 +508,92 @@ not provide ETags.
 
 The cache expires after `cache.page_list_ttl_ms` and is invalidated after a
 successful write or delete.
+
+### Content cache
+
+`state.content_cache[space][path]` contains:
+
+```lua
+{
+  at = monotonic_time_ms,
+  content = "remote Markdown body",
+  meta = {},
+}
+```
+
+This cache is shared by full-text search, backlink discovery, and Telescope
+previews during individual reads. Entries expire after
+`cache.page_content_ttl_ms`. Once a page is part of the search index, the
+indexed document is preferred instead.
+
+### Search index
+
+`state.search_indexes[space]` contains:
+
+```lua
+{
+  documents = {
+    ["Projects/Finnova.md"] = {
+      path = "Projects/Finnova.md",
+      display = "Projects/Finnova",
+      content = "...",
+      meta = {
+        last_modified = 1787300000000,
+        size = 1234,
+      },
+      list_meta = {
+        last_modified = 1787300000000,
+        size = 1234,
+      },
+      indexed_at = 123456,
+      lines = { "# Finnova", "..." },
+      outgoing = {
+        {
+          target = "roadmap.md",
+          lnum = 12,
+          col = 8,
+          text = "See [[Roadmap]]",
+        },
+      },
+    },
+  },
+  lines = {
+    {
+      path = "Projects/Finnova.md",
+      lnum = 12,
+      col = 1,
+      text = "See [[Roadmap]]",
+    },
+  },
+  incoming = {
+    ["roadmap.md"] = {
+      {
+        path = "Projects/Finnova.md",
+        lnum = 12,
+        col = 8,
+        text = "See [[Roadmap]]",
+      },
+    },
+  },
+}
+```
+
+`documents` is the source of truth. `lines` and `incoming` are derived lookup
+structures rebuilt locally after a document changes.
+
+`list_meta` is kept separately from metadata returned by an individual page
+read. Only listing metadata is compared during later refreshes, avoiding
+differences in header representation from causing unnecessary re-downloads.
+When a listing provides neither modification time nor size, `indexed_at` and
+`cache.page_content_ttl_ms` provide a periodic refresh fallback.
+
+`state.search_index_dirty[space][path]` marks pages changed by a successful
+plugin write or delete. The next index refresh downloads those paths even
+before metadata comparison.
+
+The index lasts for the Neovim process. It is not written to disk because page
+content may be sensitive and persistent local storage should be an explicit
+future feature.
 
 ### Session ID
 
@@ -738,11 +828,14 @@ non-page paths in future attachment support.
 
 `config.resolve_token()` supports:
 
-1. `auth.token_env`: read a named environment variable;
-2. `auth.token`: call a Lua function;
-3. `auth.command`: execute an argv table and trim stdout.
+1. a session-only token set through `SilverBulletSetToken`;
+2. `auth.token_env`: read a named environment variable;
+3. `auth.token`: call a Lua function;
+4. `auth.command`: execute an argv table and trim stdout.
 
-The first configured provider in that order is used.
+The first available provider in that order is used. Session tokens are held in
+a private table keyed by the configured space object and are cleared when
+`setup()` runs again or Neovim exits.
 
 Literal token values are rejected during setup because `auth.token` must be a
 function.
@@ -972,20 +1065,84 @@ It:
 - caches pages by space;
 - supplies simple substring completion.
 
+### `lua/silverbullet/search.lua`
+
+Provides the remote-content index shared by search, backlinks, and previews.
+
+It:
+
+- reads pages through `client/fs.lua`;
+- keeps a session-local document index per space;
+- compares `last_modified` and `size` from `pages.list()` with indexed
+  metadata;
+- downloads only new, changed, or explicitly invalidated pages after the
+  initial build;
+- removes documents no longer present in the listing;
+- skips individual pages that fail to load and returns structured failure
+  details alongside the usable document index;
+- builds searchable line entries;
+- exposes case-insensitive literal full-text matching entirely against local
+  indexed lines;
+- records page, line, column, and complete page content for every result;
+- extracts outgoing wiki links and builds an inverted target-to-source
+  backlink map;
+- excludes self-links from backlink results.
+
+The index is built from ordinary filesystem API reads and does not require the
+Runtime API. Initial construction still requires one read per Markdown page;
+subsequent refreshes normally require only the listing request.
+
 ### `lua/silverbullet/picker/init.lua`
 
 Selects a picker provider.
 
-The current accepted values are `auto` and `builtin`, both of which use the
-built-in provider. Other values fail explicitly rather than silently choosing
-an implementation.
+Accepted values are:
+
+- `auto`: use Telescope when its picker module can be loaded, otherwise use
+  the builtin provider;
+- `telescope`: require Telescope and report a clear error if it is absent;
+- `builtin`: always use `vim.ui.select()`.
+
+Provider selection is isolated from page retrieval and buffer opening. The
+module dispatches page finding, full-text search, and backlinks to the selected
+provider.
+
+### `lua/silverbullet/picker/common.lua`
+
+Contains behavior shared by picker providers:
+
+- formatting a `page:line: text` result;
+- opening the selected source page;
+- placing the cursor at the matching line and column.
 
 ### `lua/silverbullet/picker/builtin.lua`
 
 Fetches pages through `pages.lua`, displays them with `vim.ui.select()`, and
-opens the selected page.
+opens the selected page. For full-text search it prompts with `vim.ui.input()`,
+performs a literal search through `search.lua`, and presents matches with
+`vim.ui.select()`. Backlinks use the same result selector.
 
 It contains no HTTP or cache logic.
+
+### `lua/silverbullet/picker/telescope.lua`
+
+Provides page, full-text, and backlink pickers through Telescope.
+
+It:
+
+- obtains the same cached page entries as the builtin picker;
+- creates entries whose display text omits `.md`;
+- includes both display text and the full path in Telescope's `ordinal` field;
+- uses Telescope's generic sorter;
+- replaces the default selection action;
+- closes Telescope before opening the selected SilverBullet buffer;
+- loads remote Markdown into a buffer previewer;
+- positions previews at matching search or backlink lines;
+- indexes every non-empty page line for interactive full-text fuzzy search;
+- accepts picker options from `picker.telescope`.
+
+Telescope remains optional because this module is loaded only after provider
+selection confirms it is available.
 
 ### `lua/silverbullet/links.lua`
 
@@ -1003,6 +1160,10 @@ Supported forms:
 
 `at_cursor()` scans complete `[[...]]` ranges on the current line and selects
 the one containing the cursor byte position.
+
+`extract()` returns every complete wiki link in a line together with its byte
+columns. The backlink index uses this parser rather than a second link syntax
+implementation.
 
 Heading navigation compares Markdown ATX heading text case-insensitively.
 
@@ -1056,7 +1217,10 @@ Health checks intentionally avoid printing credentials or request headers.
 | Command | Implementation |
 | --- | --- |
 | `SilverBulletHealth` | Executes `checkhealth silverbullet` |
+| `SilverBulletSetToken [space]` | Prompts with `inputsecret()` and sets an in-memory token override |
 | `SilverBulletFind` | Calls the configured page picker |
+| `SilverBulletSearch [query]` | Searches all indexed page lines |
+| `SilverBulletBacklinks` | Finds wiki links targeting the current page |
 | `SilverBulletOpen` | Opens a normalized page in the default space |
 | `SilverBulletNew` | Uses the same open path; a `404` becomes an empty buffer |
 | `SilverBulletReload[!]` | Reloads, optionally discarding local edits |
@@ -1073,6 +1237,9 @@ during `BufReadCmd`.
 
 ```text
 <Plug>(SilverBulletFind)
+<Plug>(SilverBulletSetToken)
+<Plug>(SilverBulletSearch)
+<Plug>(SilverBulletBacklinks)
 <Plug>(SilverBulletFollowLink)
 <Plug>(SilverBulletOpenWeb)
 ```
@@ -1142,11 +1309,14 @@ The current test coverage includes:
 - `.md` extension behavior;
 - Unicode and reserved-character URI round trips;
 - wiki-link parsing and cursor lookup;
+- extraction of multiple wiki links from one line;
 - Runtime Lua-literal escaping;
 - credential redaction;
 - authenticated listing;
 - nested Unicode page writes and reads;
 - ETag conflict rejection;
+- full-text matching across remote pages;
+- backlink discovery and source locations;
 - deletion;
 - virtual-buffer opening;
 - `BufWriteCmd` persistence;
@@ -1167,8 +1337,9 @@ The test script:
 
 ### Alternative picker
 
-A future picker should consume `pages.list()` and call `buffer.open()`. It
-should not access the transport directly.
+A picker should consume `pages.list()` and call `buffer.open()`. It should not
+access the transport directly. The builtin and Telescope providers both follow
+this boundary.
 
 The provider selection belongs in `picker/init.lua`, while provider-specific
 UI belongs in a separate module.
@@ -1181,8 +1352,10 @@ placeholder for scheduling abstraction.
 
 ### Runtime-backed features
 
-Backlinks, tasks, anchors, queries, and rename should be built on
-`client/runtime.lua`.
+Tasks, anchors, arbitrary SilverBullet queries, and rename should be built on
+`client/runtime.lua`. Backlinks currently use direct wiki-link scanning; a
+future Runtime-backed strategy could include references derived from indexed
+objects that are not represented by literal wiki links.
 
 Any value embedded in a SilverBullet Lua expression must pass through
 `runtime.literal()` or a future structured serializer. Page names must never
@@ -1212,9 +1385,24 @@ features.
   SilverBullet's full heading/anchor normalization rules.
 - Completion is synchronous and uses simple case-insensitive substring
   matching.
-- The builtin picker sorts alphabetically and does not yet implement weighted
-  fuzzy scoring or recency ranking.
-- Picker provider `auto` currently resolves only to the builtin picker.
+- The builtin picker sorts alphabetically and relies on the active
+  `vim.ui.select()` implementation for filtering. Telescope provides fuzzy
+  matching when installed.
+- Neither picker currently applies custom exact-basename, path-component, or
+  recency weighting beyond its provider's normal sorter.
+- Full-text indexing reads every Markdown page synchronously when its content
+  is first indexed, which can be slow for large or high-latency spaces.
+- The incremental index is process-local and is rebuilt after restarting
+  Neovim.
+- Unreadable or stale listing entries are skipped with a warning. Results from
+  successfully indexed pages remain available.
+- Telescope full-text search indexes non-empty lines rather than tokenized
+  documents.
+- Backlinks recognize literal wiki links whose normalized page path matches
+  the target. They do not include dynamically generated or Runtime-indexed
+  references.
+- External edits can remain stale until the page-list cache expires after
+  `cache.page_list_ttl_ms`.
 - `async.lua` is not used by the current workflows.
 - Conflict diffing is two-way: local content versus the latest remote content.
   There is no three-way merge UI using the stored baseline.
@@ -1225,7 +1413,8 @@ features.
 - A forced overwrite deliberately sends no precondition.
 - There is no offline cache or synchronization queue.
 - Attachments and image pasting are not implemented.
-- Read, write, page listing, completion, and health requests are synchronous.
+- Read, write, page listing, content indexing, completion, previews, and
+  health requests are synchronous.
 - The transport is designed for Linux and macOS behavior; Windows temporary
   file and curl behavior has not been validated.
 
@@ -1239,4 +1428,3 @@ The implementation is based on:
 - [Neovim API](https://neovim.io/doc/user/api.html)
 - [Neovim autocommands](https://neovim.io/doc/user/autocmd.html)
 - [Neovim `:checkhealth`](https://neovim.io/doc/user/health.html)
-

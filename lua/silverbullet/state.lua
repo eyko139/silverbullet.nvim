@@ -1,6 +1,9 @@
 local M = {
   buffers = {},
   page_cache = {},
+  content_cache = {},
+  search_indexes = {},
+  search_index_dirty = {},
   session_id = nil,
 }
 
@@ -26,6 +29,24 @@ end
 
 function M.invalidate_pages(space)
   M.page_cache[space] = nil
+end
+
+function M.invalidate_content(space, path)
+  if path and M.content_cache[space] then
+    M.content_cache[space][path] = nil
+  else
+    M.content_cache[space] = nil
+  end
+end
+
+function M.invalidate_search_index(space, path)
+  if not path then
+    M.search_indexes[space] = nil
+    M.search_index_dirty[space] = nil
+    return
+  end
+  M.search_index_dirty[space] = M.search_index_dirty[space] or {}
+  M.search_index_dirty[space][path] = true
 end
 
 return M

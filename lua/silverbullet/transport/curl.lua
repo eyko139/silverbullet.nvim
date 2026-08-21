@@ -128,7 +128,15 @@ function M.request(space, request)
   cleanup(cleanup_paths)
   local status, response_headers = parse_headers(raw_headers)
   if result.code ~= 0 and status == 0 then
-    return nil, log.redact(vim.trim(result.stderr or ("curl exited with " .. result.code)))
+    local detail = vim.trim(result.stderr or "")
+    if detail == "" then
+      if result.signal and result.signal ~= 0 then
+        detail = ("curl was terminated by signal %d"):format(result.signal)
+      else
+        detail = ("curl exited with code %d"):format(result.code)
+      end
+    end
+    return nil, log.redact(detail)
   end
   return {
     status = status,

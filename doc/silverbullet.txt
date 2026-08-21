@@ -27,6 +27,9 @@ Neovim 0.10+, curl, and SilverBullet 2.9+ are required.
 COMMANDS                                        *silverbullet-commands*
 
 :SilverBulletFind             Select and open a Markdown page.
+:SilverBulletSetToken [space] Securely set a session-only API token.
+:SilverBulletSearch [query]   Search the full text of all Markdown pages.
+:SilverBulletBacklinks        Find wiki links to the current page.
 :SilverBulletOpen {page}      Open a page, adding .md when needed.
 :SilverBulletNew {page}       Open a new empty page.
 :SilverBulletReload[!]        Reload; ! discards local changes.
@@ -35,5 +38,18 @@ COMMANDS                                        *silverbullet-commands*
 :SilverBulletOpenWeb          Open the current page in a browser.
 :SilverBulletHome             Open index.md.
 :SilverBulletHealth           Run |checkhealth| for silverbullet.
+
+The default picker provider is "auto". It uses telescope.nvim when available
+and otherwise falls back to |vim.ui.select()|. Set picker.provider to
+"telescope" or "builtin" to choose explicitly.
+
+<Plug>(SilverBulletSetToken) prompts with |inputsecret()| and keeps the token
+only in memory for the current Neovim process.
+
+Telescope page, search, and backlink pickers include remote Markdown previews.
+The first full-text search or backlink lookup builds a session-local document
+index through the filesystem API. Later lookups use GET /.fs metadata to fetch
+only new or changed pages. Plugin writes and deletes invalidate their indexed
+document immediately.
 
 vim:tw=78:ts=8:noet:ft=help:norl:

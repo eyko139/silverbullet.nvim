@@ -11,7 +11,11 @@ overwritten.
 
 - Open, create, edit, reload, and delete remote Markdown pages
 - Use normal Neovim buffers and `:write`
-- Browse pages with a dependency-free `vim.ui.select()` picker
+- Fuzzy-find pages with Telescope when available
+- Fall back to the dependency-free `vim.ui.select()` picker
+- Preview remote Markdown pages inside Telescope
+- Search the full text of every page in a space
+- Find wiki-link backlinks to the current page
 - Follow `[[Page]]`, `[[Page|Alias]]`, and `[[Page#Heading]]` links
 - Detect remote changes with ETags or a SilverBullet 2.9-compatible fallback
 - Open the current page in a browser
@@ -20,13 +24,19 @@ overwritten.
 - Resolve credentials only when making a request
 - Diagnose configuration, authentication, proxy, and connectivity problems
   with `:checkhealth silverbullet`
-- Use only core Neovim APIs and `curl`; no plugin dependencies are required
+- Use only core Neovim APIs and `curl`; no plugin dependencies are mandatory
 
 ## Requirements
 
 - Neovim 0.10 or newer
 - SilverBullet 2.9 or newer
 - `curl` available on `PATH`
+
+### Optional dependencies
+
+- [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) for fuzzy
+  page and content search with Markdown previews. It is selected automatically
+  when installed.
 
 ## Installation
 
@@ -114,42 +124,23 @@ require("silverbullet").setup({
 
 ## Authentication
 
-Do not place a SilverBullet token directly in your Neovim configuration.
-Literal token strings are rejected.
-
-### Environment variable
+Use an environment variable whenever possible:
 
 ```lua
-auth = {
-  token_env = "SILVERBULLET_TOKEN",
-}
+auth = { token_env = "SILVERBULLET_TOKEN" }
 ```
-
-Set the variable before starting Neovim:
 
 ```sh
 export SILVERBULLET_TOKEN="your-token"
 ```
 
-### Lua callback
+Alternatively, `auth.token` may be a Lua callback and `auth.command` may be an
+argv table that prints the token. Literal tokens in configuration are
+rejected.
 
-```lua
-auth = {
-  token = function()
-    return require("my_secrets").silverbullet_token()
-  end,
-}
-```
-
-### External command
-
-```lua
-auth = {
-  command = { "op", "read", "op://Personal/SilverBullet/token" },
-}
-```
-
-The command must print the token to standard output.
+To enter a token securely for the current Neovim session, run
+`:SilverBulletSetToken [space]` or map `<Plug>(SilverBulletSetToken)`. The
+prompt uses `inputsecret()` and the token is kept only in memory.
 
 ## Configuration
 
@@ -187,6 +178,7 @@ require("silverbullet").setup({
 
   cache = {
     page_list_ttl_ms = 5000,
+    page_content_ttl_ms = 30000,
   },
 
   conflict = {
@@ -195,7 +187,13 @@ require("silverbullet").setup({
   },
 
   picker = {
+    -- "auto" uses Telescope when available, then falls back to vim.ui.select().
+    -- Explicit alternatives: "telescope" or "builtin".
     provider = "auto",
+    telescope = {
+      -- Any Telescope picker options, for example:
+      -- layout_strategy = "vertical",
+    },
   },
 })
 ```
@@ -215,7 +213,10 @@ Start with:
 
 | Command | Description |
 | --- | --- |
+| `:SilverBulletSetToken [space]` | Prompt for a session-only API token |
 | `:SilverBulletFind` | Select and open a page |
+| `:SilverBulletSearch [query]` | Search across the contents of all pages |
+| `:SilverBulletBacklinks` | Find pages linking to the current page |
 | `:SilverBulletOpen {page}` | Open an existing page |
 | `:SilverBulletNew {page}` | Open a new empty page |
 | `:SilverBulletReload` | Reload the current page |
@@ -235,8 +236,85 @@ mappings that can be assigned in your configuration:
 
 ```lua
 vim.keymap.set("n", "<leader>sf", "<Plug>(SilverBulletFind)")
+vim.keymap.set("n", "<leader>sk", "<Plug>(SilverBulletSetToken)")
+vim.keymap.set("n", "<leader>ss", "<Plug>(SilverBulletSearch)")
+vim.keymap.set("n", "<leader>sb", "<Plug>(SilverBulletBacklinks)")
 vim.keymap.set("n", "<CR>", "<Plug>(SilverBulletFollowLink)")
 vim.keymap.set("n", "<leader>so", "<Plug>(SilverBulletOpenWeb)")
+```
+
+#### Example: use `gd` to follow wiki links
+
+This buffer-local mapping uses `gd` as "go to definition" for SilverBullet
+wiki links without replacing the normal LSP mapping in other buffers:
+
+```lua
+vim.api.nvim_create_autocmd("BufEnter", {
+  pattern = "silverbullet://*",
+  callback = function(event)
+    vim.keymap.set(
+      "n",
+      "gd",
+      "<Plug>(SilverBulletFollowLink)",
+      {
+        buffer = event.buf,
+        desc = "[G]oto SilverBullet [D]efinition",
+      }
+    )
+  end,
+})
+```
+
+### Full-text search
+
+```vim
+:SilverBulletSearch
+:SilverBulletSearch deployment notes
+```
+
+The first search in a Neovim session builds a shared local index of page
+content, searchable lines, and outgoing wiki links. Later searches compare the
+cached document metadata with `GET /.fs` and download only new or changed
+pages. Writes and deletes made through the plugin invalidate the affected
+document immediately.
+
+With Telescope, each indexed non-empty line becomes a fuzzy-searchable entry
+and the complete page is shown in a Markdown preview at the matching line. The
+optional command argument becomes Telescope's initial query.
+
+The builtin provider prompts for a query and performs a
+case-insensitive literal search before showing the results with
+`vim.ui.select()`.
+
+If an individual listing entry cannot be read, indexing skips that page,
+reports the failure, and continues with the remaining pages. Search fails
+entirely only when no page can be indexed.
+
+### Backlinks
+
+Run `:SilverBulletBacklinks` from a SilverBullet page to find other pages
+containing `[[wiki links]]` to it. Selecting a result opens the source page at
+the matching line.
+
+Backlinks are computed from the filesystem API and do not require
+SilverBullet's optional Runtime API. They use the same incremental document
+index as full-text search, so backlink lookup is immediate after the index has
+been built. Telescope displays each source page in a Markdown preview.
+
+### Telescope previews
+
+The page, full-text search, and backlink pickers preview remote Markdown when
+Telescope is active. Disable previews or pass any other picker option through
+the Telescope configuration:
+
+```lua
+picker = {
+  provider = "auto",
+  telescope = {
+    previewer = false,
+    layout_strategy = "vertical",
+  },
+}
 ```
 
 ### Completion
@@ -246,25 +324,6 @@ Page completion is available inside `[[...]]` through Neovim's omnifunc:
 ```text
 <C-x><C-o>
 ```
-
-## Conflict protection
-
-On servers that return ETags, existing pages are written with `If-Match` and
-new pages with `If-None-Match`. A stale write is rejected by the server.
-
-SilverBullet 2.9 does not support atomic conditional writes. In that case, the
-plugin fetches the current remote content immediately before saving and
-compares it with the version originally opened in Neovim. This prevents
-detected overwrites but retains a small time-of-check/time-of-use race.
-
-When a conflict is found, the plugin can:
-
-- Show a diff against the remote page
-- Reload the remote page
-- Force an overwrite after a second confirmation
-- Cancel and preserve local changes
-
-Failed writes never clear the buffer's `modified` state.
 
 ## Reverse proxies and Authelia
 
@@ -288,6 +347,14 @@ Run:
 The check covers Neovim and `curl` versions, configuration, credential
 providers, connectivity, authentication, filesystem access, custom CA files,
 ETag support, and the optional Runtime API.
+
+## Known limitations
+
+- The full-text and backlink index is created lazily on the first
+  `:SilverBulletSearch` or `:SilverBulletBacklinks` call. Building it requires
+  downloading every Markdown page once, so the first lookup can be slow.
+- The index is stored only in Neovim memory and is discarded when Neovim
+  exits. Later lookups in the same session download only new or changed pages.
 
 ## Development
 

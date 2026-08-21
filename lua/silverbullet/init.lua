@@ -14,4 +14,8 @@ function M.find(space)
   return require("silverbullet.picker").find(space)
 end
 
+function M.search(query, space)
+  return require("silverbullet.picker").search(space, query)
+end
+
 return M
