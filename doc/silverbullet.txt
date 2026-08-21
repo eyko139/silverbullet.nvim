@@ -1,0 +1,39 @@
+*silverbullet.txt*               Remote SilverBullet pages in Neovim
+
+==============================================================================
+CONTENTS                                                   *silverbullet*
+
+1. Setup                                            |silverbullet-setup|
+2. Commands                                      |silverbullet-commands|
+
+==============================================================================
+SETUP                                              *silverbullet-setup*
+
+>
+  require("silverbullet").setup({
+    default_space = "personal",
+    spaces = {
+      personal = {
+        url = "https://bullet.example.com",
+        auth = { token_env = "SILVERBULLET_TOKEN" },
+      },
+    },
+  })
+<
+
+Neovim 0.10+, curl, and SilverBullet 2.9+ are required.
+
+==============================================================================
+COMMANDS                                        *silverbullet-commands*
+
+:SilverBulletFind             Select and open a Markdown page.
+:SilverBulletOpen {page}      Open a page, adding .md when needed.
+:SilverBulletNew {page}       Open a new empty page.
+:SilverBulletReload[!]        Reload; ! discards local changes.
+:SilverBulletDelete           Delete the current page after confirmation.
+:SilverBulletFollowLink       Follow the wiki link under the cursor.
+:SilverBulletOpenWeb          Open the current page in a browser.
+:SilverBulletHome             Open index.md.
+:SilverBulletHealth           Run |checkhealth| for silverbullet.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

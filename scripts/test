@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+port_file="$(mktemp)"
+python3 tests/mock_server.py "$port_file" &
+server_pid=$!
+trap 'kill "$server_pid" 2>/dev/null || true; rm -f "$port_file"' EXIT
+
+while [ ! -s "$port_file" ]; do
+  sleep 0.05
+done
+
+SILVERBULLET_TEST_PORT="$(cat "$port_file")"
+export SILVERBULLET_TEST_PORT
+nvim --headless -u tests/minimal_init.lua -c "lua dofile('tests/run.lua')" -c "qa!"
