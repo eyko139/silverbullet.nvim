@@ -254,6 +254,20 @@ vim.api.nvim_create_autocmd("BufEnter", {
 })
 ```
 
+### Wiki-link completion
+
+Inside an unfinished wiki link, trigger the built-in omnifunc with
+`<C-x><C-o>` or map it to a preferred insert-mode key:
+
+```lua
+vim.keymap.set("i", "<C-l>", "<C-x><C-o>", {
+  desc = "Complete SilverBullet page",
+})
+```
+
+Selecting a page inserts the closing `]]`. Existing closing brackets are not
+duplicated.
+
 ## Known limitations
 
 - The full-text and backlink index is created lazily on the first

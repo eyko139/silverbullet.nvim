@@ -18,7 +18,15 @@ function M.omnifunc(findstart, base)
   local result = {}
   local completion_err
   pages.complete(base, function(matches, err)
-    result = matches
+    local cursor_col = vim.api.nvim_win_get_cursor(0)[2]
+    local after_cursor = vim.api.nvim_get_current_line():sub(cursor_col + 1)
+    local closing = after_cursor:match("^%]%]") and "" or "]]"
+    result = vim.tbl_map(function(match)
+      return {
+        word = match .. closing,
+        abbr = match,
+      }
+    end, matches)
     completion_err = err
   end, buffer_state and buffer_state.space or nil)
   if completion_err then
