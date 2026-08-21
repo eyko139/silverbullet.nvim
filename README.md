@@ -317,14 +317,6 @@ picker = {
 }
 ```
 
-### Completion
-
-Page completion is available inside `[[...]]` through Neovim's omnifunc:
-
-```text
-<C-x><C-o>
-```
-
 ## Reverse proxies and Authelia
 
 Authelia or another authentication middleware may redirect terminal API
