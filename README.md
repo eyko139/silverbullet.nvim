@@ -59,25 +59,6 @@ overwritten.
 }
 ```
 
-For local development:
-
-```lua
-{
-  dir = "/path/to/silverbullet.nvim",
-  opts = {
-    default_space = "personal",
-    spaces = {
-      personal = {
-        url = "https://bullet.example.com",
-        auth = {
-          token_env = "SILVERBULLET_TOKEN",
-        },
-      },
-    },
-  },
-}
-```
-
 ### packer.nvim
 
 ```lua
@@ -215,6 +196,9 @@ Start with:
 | --- | --- |
 | `:SilverBulletSetToken [space]` | Prompt for a session-only API token |
 | `:SilverBulletFind` | Select and open a page |
+| `:SilverBulletFollowLink` | Follow the wiki link under the cursor |
+| `:SilverBulletOpenWeb` | Open the current page in a browser |
+| `:SilverBulletHome` | Open `index.md` |
 | `:SilverBulletSearch [query]` | Search across the contents of all pages |
 | `:SilverBulletBacklinks` | Find pages linking to the current page |
 | `:SilverBulletOpen {page}` | Open an existing page |
@@ -222,9 +206,6 @@ Start with:
 | `:SilverBulletReload` | Reload the current page |
 | `:SilverBulletReload!` | Discard local changes and reload |
 | `:SilverBulletDelete` | Delete the current page after confirmation |
-| `:SilverBulletFollowLink` | Follow the wiki link under the cursor |
-| `:SilverBulletOpenWeb` | Open the current page in a browser |
-| `:SilverBulletHome` | Open `index.md` |
 | `:SilverBulletHealth` | Run the SilverBullet health check |
 
 New pages are created when their buffer is first written.
@@ -264,6 +245,15 @@ vim.api.nvim_create_autocmd("BufEnter", {
   end,
 })
 ```
+
+## Known limitations
+
+- The full-text and backlink index is created lazily on the first
+  `:SilverBulletSearch` or `:SilverBulletBacklinks` call. Building it requires
+  downloading every Markdown page once, so the first lookup can be slow.
+- The index is stored only in Neovim memory and is discarded when Neovim
+  exits. Later lookups in the same session download only new or changed pages.
+
 
 ### Full-text search
 
@@ -340,13 +330,9 @@ The check covers Neovim and `curl` versions, configuration, credential
 providers, connectivity, authentication, filesystem access, custom CA files,
 ETag support, and the optional Runtime API.
 
-## Known limitations
+## Documenatation
 
-- The full-text and backlink index is created lazily on the first
-  `:SilverBulletSearch` or `:SilverBulletBacklinks` call. Building it requires
-  downloading every Markdown page once, so the first lookup can be slow.
-- The index is stored only in Neovim memory and is discarded when Neovim
-  exits. Later lookups in the same session download only new or changed pages.
+- [Architecture & Internals](docs/ARCHITECTURE.md)
 
 ## Development
 
