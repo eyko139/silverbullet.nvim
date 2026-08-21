@@ -13,9 +13,9 @@ overwritten.
 
 ## Demo
 
-<video src="assets/silverbullet-demo.webm" controls title="silverbullet.nvim demo"></video>
+[![silverbullet.nvim demo](assets/silverbullet-demo.gif)](assets/silverbullet-demo.webm)
 
-[Watch the demo video](assets/silverbullet-demo.webm)
+Click the animation to open the original WebM recording.
 
 ## Features
 
